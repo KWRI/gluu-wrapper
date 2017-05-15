@@ -2,10 +2,10 @@
 
 This package provides a think layer to interact with Gluu server.
 
-Installation
+# Installation
 
 To install this package you should add these lines into your composer.json
-
+```
 {
   "repositories": [
     {
@@ -21,3 +21,4 @@ To install this package you should add these lines into your composer.json
   "prefer-stable": true,
   "minimum-stability": "dev"
 }
+```
