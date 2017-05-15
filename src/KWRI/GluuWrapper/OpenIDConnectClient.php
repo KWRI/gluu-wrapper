@@ -21,6 +21,10 @@
  *
  */
 
+use \Exception;
+use KWRI\GluuWrapper\JWTBuilder;
+use Crypt;
+
 /**
  * Use session to manage a nonce
  */
@@ -195,6 +199,12 @@ class OpenIDConnectClient
      */
     public function setProviderURL($provider_url) {
         $this->providerConfig['issuer'] = $provider_url;
+
+        // Set default values
+        $this->providerConfig['token_endpoint'] = $provider_url.'oxauth/seam/resource/restv1/oxauth/token';
+        $this->providerConfig['authorization_endpoint'] = $provider_url.'oxauth/seam/resource/restv1/oxauth/authorize';
+        $this->providerConfig['userinfo_endpoint'] = $provider_url.'oxauth/seam/resource/restv1/oxauth/userinfo';
+        $this->providerConfig['end_session_endpoint'] = $provider_url.'oxauth/seam/resource/restv1/oxauth/end_session';
     }
 
     /**
@@ -220,7 +230,11 @@ class OpenIDConnectClient
         if (isset($_REQUEST["code"])) {
 
             $code = $_REQUEST["code"];
-            $token_json = $this->requestTokens($code);
+            if ($state = $_REQUEST["state"]) {
+                $token_json = $this->requestTokens($code, $state);
+            } else {
+                $token_json = $this->requestTokens($code);
+            }
 
             // Throw an error if the server returns one
             if (isset($token_json->error)) {
@@ -257,6 +271,7 @@ class OpenIDConnectClient
             }
 
             // If this is a valid claim
+            var_dump($token_json);die;
             if ($this->verifyJWTclaims($claims, $token_json->access_token)) {
 
                 // Clean up the session a little
@@ -504,9 +519,9 @@ class OpenIDConnectClient
      * @param $code
      * @return mixed
      */
-    private function requestTokens($code) {
+    private function requestTokens($code, $state = null) {
         $token_endpoint = $this->getProviderConfigValue("token_endpoint");
-        $token_endpoint_auth_methods_supported = $this->getProviderConfigValue("token_endpoint_auth_methods_supported", ['client_secret_basic']);
+        $token_endpoint_auth_methods_supported = $this->getProviderConfigValue("token_endpoint_auth_methods_supported", ['client_secret_basic', 'client_secret_jwt']);
 
         $headers = [];
 
@@ -521,7 +536,33 @@ class OpenIDConnectClient
         );
 
         # Consider Basic authentication if provider config is set this way
-        if (in_array('client_secret_basic', $token_endpoint_auth_methods_supported)) {
+        if ($state && in_array('client_secret_jwt', $token_endpoint_auth_methods_supported)) {
+            $data = $this->decryptClientData($state);
+
+            $builder = new JWTBuilder('HS256');
+            $exp = 86400;
+
+            //prepare openID payload
+            $builder->addPayloads([
+                "iss" => $this->clientID,
+                "sub" => $this->clientID,
+                "aud" => $token_endpoint,
+                "jti" => md5(time()),
+                "exp" => time() + $exp,
+                "iat" => time()
+                // claims => {} cannot use empty claims, if empty don't include it!
+            ]);
+
+            //set client secret
+            $builder->setSecret($this->clientSecret);
+
+            //generate JWT
+            $token = $builder->generate();
+
+            $token_params['client_assertion_type'] = 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer';
+            $token_params['client_assertion'] = $token.'';
+
+        } else if (in_array('client_secret_basic', $token_endpoint_auth_methods_supported)) {
             $headers = ['Authorization: Basic ' . base64_encode($this->clientID . ':' . $this->clientSecret)];
             unset($token_params['client_secret']);
         }
@@ -532,6 +573,8 @@ class OpenIDConnectClient
         return json_decode($this->fetchURL($token_endpoint, $token_params, $headers));
 
     }
+
+
 
     /**
      * Requests Access token with refresh token
@@ -558,6 +601,22 @@ class OpenIDConnectClient
         $this->refreshToken = $json->refresh_token;
 
         return $json;
+    }
+
+    /**
+     * Decrypt state
+     * @param string state
+     * @param string decrypted state
+     */
+    protected function decryptClientData($data)
+    {
+        $data = base64_decode(str_pad(strtr($data, '-_', '+/'), strlen($data) % 4, '=', STR_PAD_RIGHT));
+        $data = explode('~|~', Crypt\Base::decrypt($data));
+
+        return [
+            'client_id' => $data[0],
+            'client_secret' => $data[1],
+        ];
     }
 
     /**
@@ -608,17 +667,19 @@ class OpenIDConnectClient
             "  <Modulus>" . b64url2b64($key->n) . "</Modulus>\r\n" .
             "  <Exponent>" . b64url2b64($key->e) . "</Exponent>\r\n" .
             "</RSAKeyValue>";
-	if(class_exists('Crypt_RSA')) {
-        	$rsa = new Crypt_RSA();
-		$rsa->setHash($hashtype);
-        	$rsa->loadKey($public_key_xml, Crypt_RSA::PUBLIC_FORMAT_XML);
-        	$rsa->signatureMode = Crypt_RSA::SIGNATURE_PKCS1;
-	} else {
-		$rsa = new \phpseclib\Crypt\RSA();
-		$rsa->setHash($hashtype);
-        	$rsa->loadKey($public_key_xml, \phpseclib\Crypt\RSA::PUBLIC_FORMAT_XML);
-        	$rsa->signatureMode = \phpseclib\Crypt\RSA::SIGNATURE_PKCS1;
-	}
+
+    	if(class_exists('Crypt_RSA')) {
+            $rsa = new Crypt_RSA();
+    		$rsa->setHash($hashtype);
+            $rsa->loadKey($public_key_xml, Crypt_RSA::PUBLIC_FORMAT_XML);
+            $rsa->signatureMode = Crypt_RSA::SIGNATURE_PKCS1;
+    	} else {
+    		$rsa = new \phpseclib\Crypt\RSA();
+    		$rsa->setHash($hashtype);
+            $rsa->loadKey($public_key_xml, \phpseclib\Crypt\RSA::PUBLIC_FORMAT_XML);
+            $rsa->signatureMode = \phpseclib\Crypt\RSA::SIGNATURE_PKCS1;
+    	}
+
         return $rsa->verify($payload, $signature);
     }
 
