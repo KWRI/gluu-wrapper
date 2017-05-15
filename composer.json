@@ -1,12 +1,11 @@
 {
-    "name": "KWRI/gluu-wrapper",
+    "name": "kwri/gluu-wrapper",
     "description": "Minimalistic Gluu Wrapper",
     "type": "library",
     "keywords": ["gluu"],
     "homepage": "http://kw.com/",
     "license": "Apache License 2.0",
     "require": {
-        "php": ">=5.3.3",
         "phpunit/PHPUnit": "3.7.*",
         "instaclick/php-code-sniffer": "dev-master",
         "lcobucci/jwt": "^3.3",
