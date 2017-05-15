@@ -1,6 +1,6 @@
 [![Build Status](https://travis-ci.org/KWRI/gluu-wrapper.svg?branch=master)](https://travis-ci.org/KWRI/gluu-wrapper)
 
-This package provides a think layer to interact with Gluu server.
+This package provides a thin layer to interact with Gluu server.
 
 # Installation
 
