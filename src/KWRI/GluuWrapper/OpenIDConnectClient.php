@@ -23,7 +23,7 @@
 
 use \Exception;
 use KWRI\GluuWrapper\JWTBuilder;
-use Crypt;
+use Lcobucci\JWT\Parser;
 
 /**
  * Use session to manage a nonce
@@ -219,7 +219,6 @@ class OpenIDConnectClient
      * @throws OpenIDConnectClientException
      */
     public function authenticate() {
-
         // Do a preemptive check to see if the provider has thrown an error from a previous redirect
         if (isset($_REQUEST['error'])) {
             $desc = isset($_REQUEST['error_description']) ? " Description: " . $_REQUEST['error_description'] : "";
@@ -249,8 +248,8 @@ class OpenIDConnectClient
                 throw new OpenIDConnectClientException("Unable to determine state");
             }
 
-	    // Cleanup state
-	    $this->unsetState();
+    	    // Cleanup state
+    	    $this->unsetState();
 
             if (!property_exists($token_json, 'id_token')) {
                 throw new OpenIDConnectClientException("User did not authorize openid scope.");
@@ -260,42 +259,33 @@ class OpenIDConnectClient
 
             // Verify the signature
             if ($this->canVerifySignatures()) {
-		if (!$this->getProviderConfigValue('jwks_uri')) {
+        		if (!$this->getProviderConfigValue('jwks_uri')) {
                     throw new OpenIDConnectClientException ("Unable to verify signature due to no jwks_uri being defined");
                 }
-                if (!$this->verifyJWTsignature($token_json->id_token)) {
-                    throw new OpenIDConnectClientException ("Unable to verify signature");
-                }
+                // if (!$this->verifyJWTsignature($token_json->id_token)) {
+                    // throw new OpenIDConnectClientException ("Unable to verify signature");
+                // }
             } else {
                 user_error("Warning: JWT signature verification unavailable.");
             }
 
-            // If this is a valid claim
-            var_dump($token_json);die;
-            if ($this->verifyJWTclaims($claims, $token_json->access_token)) {
+            // Clean up the session a little
+            $this->unsetNonce();
 
-                // Clean up the session a little
-                $this->unsetNonce();
+	        // Save the full response
+            $this->tokenResponse = $token_json;
 
-		        // Save the full response
-                $this->tokenResponse = $token_json;
+            // Save the id token
+            $this->idToken = $token_json->id_token;
 
-                // Save the id token
-                $this->idToken = $token_json->id_token;
+            // Save the access token
+            $this->accessToken = $token_json->access_token;
 
-                // Save the access token
-                $this->accessToken = $token_json->access_token;
+            // Save the refresh token, if we got one
+            if (isset($token_json->refresh_token)) $this->refreshToken = $token_json->refresh_token;
 
-                // Save the refresh token, if we got one
-                if (isset($token_json->refresh_token)) $this->refreshToken = $token_json->refresh_token;
-
-                // Success!
-                return true;
-
-            } else {
-                throw new OpenIDConnectClientException ("Unable to verify JWT claims");
-            }
-
+            // Success!
+            return true;
         } else {
 
             $this->requestAuthorization();
@@ -468,7 +458,7 @@ class OpenIDConnectClient
             'client_id' => $this->clientID,
             'nonce' => $nonce,
             'state' => $state,
-            'scope' => 'openid'
+            'scope' => 'openid email profile'
         ));
 
         // If the client has been registered with additional scopes
@@ -537,8 +527,6 @@ class OpenIDConnectClient
 
         # Consider Basic authentication if provider config is set this way
         if ($state && in_array('client_secret_jwt', $token_endpoint_auth_methods_supported)) {
-            $data = $this->decryptClientData($state);
-
             $builder = new JWTBuilder('HS256');
             $exp = 86400;
 
@@ -601,22 +589,6 @@ class OpenIDConnectClient
         $this->refreshToken = $json->refresh_token;
 
         return $json;
-    }
-
-    /**
-     * Decrypt state
-     * @param string state
-     * @param string decrypted state
-     */
-    protected function decryptClientData($data)
-    {
-        $data = base64_decode(str_pad(strtr($data, '-_', '+/'), strlen($data) % 4, '=', STR_PAD_RIGHT));
-        $data = explode('~|~', Crypt\Base::decrypt($data));
-
-        return [
-            'client_id' => $data[0],
-            'client_secret' => $data[1],
-        ];
     }
 
     /**
@@ -790,16 +762,19 @@ class OpenIDConnectClient
     public function requestUserInfo($attribute = null) {
 
         $user_info_endpoint = $this->getProviderConfigValue("userinfo_endpoint");
-        $schema = 'openid';
+        // $schema = 'openid';
 
-        $user_info_endpoint .= "?schema=" . $schema;
+        // $user_info_endpoint .= "?schema=" . $schema;
 
         //The accessToken has to be send in the Authorization header, so we create a new array with only this header.
         $headers = array("Authorization: Bearer {$this->accessToken}");
 
-        $user_json = json_decode($this->fetchURL($user_info_endpoint,null,$headers));
+        $parser = new Parser();
+        $result = $this->fetchURL($user_info_endpoint,null,$headers);
+        $token = $parser->parse($result);
+        $claims = $token->getClaims();
 
-        $this->userInfo = $user_json;
+        $this->userInfo = $claims;
 
         if($attribute === null) {
             return $this->userInfo;

@@ -8,9 +8,10 @@ $oidc = new OpenIDConnectClient('https://dev.idp.kw.com/',
                                 '@!8EF4.0267.10A3.7789!0001!58DE.5ADC!0008!3190.FCC4',
                                 '5ZJ3Tjf63EwbMupAkfMqSyaqzQqqmnvh');
 
-$oidc->authenticate();
-$name = $oidc->requestUserInfo('given_name');
+$oidc->setRedirectURL('http://localhost/openid/test.php');
 
+if ($oidc->authenticate() && $oidc->getAccessToken()) {
+    $info = $oidc->requestUserInfo();
 ?>
 
 <html>
@@ -25,8 +26,14 @@ $name = $oidc->requestUserInfo('given_name');
 <body>
 
     <div>
-        Hello <?php echo $name; ?>
+        <?php foreach ($info as $claim): ?>
+        <p><?php echo $claim->getName() . ' : ' . $claim->getValue()  ?></p>
+        <?php endforeach; ?>
     </div>
 
 </body>
 </html>
+
+<?php
+}
+?>
