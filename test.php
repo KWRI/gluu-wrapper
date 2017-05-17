@@ -4,11 +4,11 @@ require "vendor/autoload.php";
 
 use KWRI\GluuWrapper\OpenIDConnectClient;
 
-$oidc = new OpenIDConnectClient('https://dev.idp.kw.com/',
-                                '@!8EF4.0267.10A3.7789!0001!58DE.5ADC!0008!3190.FCC4',
-                                '5ZJ3Tjf63EwbMupAkfMqSyaqzQqqmnvh');
+$oidc = new OpenIDConnectClient('idp_url',
+                                'client_secret',
+                                'client_password');
 
-$oidc->setRedirectURL('http://localhost/openid/test.php');
+$oidc->setRedirectURL('valid_url');
 
 if ($oidc->authenticate() && $oidc->getAccessToken()) {
     $info = $oidc->requestUserInfo();
