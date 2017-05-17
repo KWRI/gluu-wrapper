@@ -22,7 +22,7 @@ To install this package you should add these lines into your composer.json
   "minimum-stability": "dev"
 }
 ```
-# Usage
+# Quickstart
 
 1. Clone this repo as `openid` folder within your root directory (eg, in apache it would be `/var/www/html`). 
 2. Do `composer install`.
