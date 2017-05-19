@@ -29,6 +29,7 @@ if ($oidc->authenticate() && $oidc->getAccessToken()) {
         <?php foreach ($info as $claim): ?>
         <p><?php echo $claim->getName() . ' : ' . $claim->getValue()  ?></p>
         <?php endforeach; ?>
+        <?php /* $oidc->refreshToken() */ ?>
     </div>
 
 </body>

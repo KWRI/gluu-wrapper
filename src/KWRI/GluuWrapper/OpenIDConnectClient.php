@@ -570,7 +570,17 @@ class OpenIDConnectClient
      * @param $code
      * @return mixed
      */
-    public function refreshToken($refresh_token) {
+    public function refreshToken($refresh_token = null) {
+
+        if (null == $refresh_token) {
+            if ($this->refreshToken) {
+                $refresh_token = $this->refreshToken;
+            } else {
+                throw new OpenIDConnectClientException("Empty refresh token");
+            }
+        }
+
+
         $token_endpoint = $this->getProviderConfigValue("token_endpoint");
 
         $grant_type = "refresh_token";
@@ -581,6 +591,29 @@ class OpenIDConnectClient
             'client_id' => $this->clientID,
             'client_secret' => $this->clientSecret,
         );
+
+        $builder = new JWTBuilder('HS256');
+        $exp = 86400;
+
+        //prepare openID payload
+        $builder->addPayloads([
+            "iss" => $this->clientID,
+            "sub" => $this->clientID,
+            "aud" => $token_endpoint,
+            "jti" => md5(time()),
+            "exp" => time() + $exp,
+            "iat" => time()
+            // claims => {} cannot use empty claims, if empty don't include it!
+        ]);
+
+        //set client secret
+        $builder->setSecret($this->clientSecret);
+
+        //generate JWT
+        $token = $builder->generate();
+
+        $token_params['client_assertion_type'] = 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer';
+        $token_params['client_assertion'] = $token.'';
 
         // Convert token params to string format
         $token_params = http_build_query($token_params, null, '&');
