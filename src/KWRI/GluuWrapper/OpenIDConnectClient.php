@@ -1158,7 +1158,11 @@ class OpenIDConnectClient
      * @return string
      */
     protected function getState() {
-        return $_SESSION['openid_connect_state'];
+        if (isset($_SESSION['openid_connect_state'])) {
+            return $_SESSION['openid_connect_state'];
+        } else {
+            return $_REQUEST['state'];
+        }
     }
 
     /**
